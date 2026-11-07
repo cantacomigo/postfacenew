@@ -7,7 +7,7 @@ export interface ExtensionFile {
   content: string;
 }
 
-export const EXTENSION_VERSION = '3.4.0';
+export const EXTENSION_VERSION = '3.4.2';
 
 export function getExtensionFiles(): ExtensionFile[] {
   const manifest = `{
@@ -425,6 +425,13 @@ function wait(ms) {
 `;
 
   const content = `// Content Script - AutoPost FB Anti-Ban v${EXTENSION_VERSION}
+function isVideoMedia(urlOrMime) {
+  if (!urlOrMime) return false;
+  const s = String(urlOrMime).toLowerCase();
+  if (s.startsWith('data:video/') || s.startsWith('video/')) return true;
+  return /\.(mp4|webm|mov|m4v|ogg|ogv|mkv|3gp|avi)(\?.*)?$/i.test(s);
+}
+
 if (window.top === window.self) {
   if (!window.__fbAutoPostListenerAttached) {
     window.__fbAutoPostListenerAttached = true;
@@ -534,19 +541,19 @@ async function handleSinglePostExecution(data) {
     document.execCommand('insertText', false, text);
     await sleep(1500);
 
-    // 4. Se houver mídia (foto ou vídeo) associada ao template, anexa EXCLUSIVAMENTE DENTRO DO MODAL
+    let hasVideo = false;
     const mediaPayload = mediaDataUrl || (mediaUrls && mediaUrls[0]);
     if (mediaPayload) {
-      const isVideo = isVideoMedia(mediaPayload);
-      console.log(\`[AutoPost FB] \${isVideo ? '🎥' : '🖼️'} Anexando \${isVideo ? 'vídeo' : 'foto'} ao post dentro do modal (sem tocar comentários)...\`);
+      hasVideo = isVideoMedia(mediaPayload);
+      console.log(\`[AutoPost FB] \${hasVideo ? '🎥' : '🖼️'} Anexando \${hasVideo ? 'vídeo' : 'foto'} ao post dentro do modal (sem tocar comentários)...\`);
       await attachMediaToFacebook(mediaPayload, dialog, editor);
-      await sleep(isVideo ? 5500 : 3500); // Aguarda upload e preview da mídia no Facebook
+      await sleep(hasVideo ? 6000 : 3500); // Aguarda upload e preview da mídia no Facebook
     }
 
     await sleep(1000);
 
     // 5. Encontra botão Postar / Publicar habilitado DENTRO DO MODAL
-    const submitBtn = await waitForSubmitButtonInDialog(dialog);
+    const submitBtn = await waitForSubmitButtonInDialog(dialog, hasVideo);
     if (submitBtn) {
       console.log('[AutoPost FB] 🚀 Clicando no botão Postar/Publicar...');
       simulateHumanClick(submitBtn);
@@ -607,18 +614,42 @@ async function waitForModalDialog() {
 function dataUrlToFile(dataUrl, defaultFilename) {
   try {
     const parts = dataUrl.split(',');
+    if (parts.length < 2) return null;
     const mimeMatch = parts[0].match(/:(.*?);/);
-    const mime = mimeMatch ? mimeMatch[1] : (isVideoMedia(dataUrl) ? 'video/mp4' : 'image/jpeg');
-    const isVideo = mime.startsWith('video/');
-    const ext = isVideo ? (mime.includes('webm') ? 'webm' : mime.includes('quicktime') ? 'mov' : 'mp4') : (mime.includes('png') ? 'png' : mime.includes('webp') ? 'webp' : 'jpg');
-    const filename = defaultFilename || (isVideo ? ('video_' + Date.now() + '.' + ext) : ('foto_' + Date.now() + '.' + ext));
+    let mime = mimeMatch ? mimeMatch[1] : '';
+
+    let isVideo = isVideoMedia(mime) || parts[0].includes('video');
+
+    // Analisa magic bytes do cabeçalho base64 para detecção 100% infalível de arquivos de vídeo MP4 / WebM
+    try {
+      const headerSnippet = atob(parts[1].slice(0, 300));
+      if (headerSnippet.includes('ftyp') || headerSnippet.includes('moov') || headerSnippet.includes('wide') || headerSnippet.includes('mdat')) {
+        isVideo = true;
+        mime = 'video/mp4';
+      } else if (headerSnippet.charCodeAt(0) === 0x1a && headerSnippet.charCodeAt(1) === 0x45) {
+        isVideo = true;
+        mime = 'video/webm';
+      }
+    } catch (e) {}
+
+    if (!mime) {
+      mime = isVideo ? 'video/mp4' : 'image/jpeg';
+    }
+
+    const ext = isVideo 
+      ? (mime.includes('webm') ? 'webm' : mime.includes('quicktime') ? 'mov' : 'mp4') 
+      : (mime.includes('png') ? 'png' : mime.includes('webp') ? 'webp' : 'jpg');
+
+    const prefix = isVideo ? 'video_' : 'foto_';
+    const filename = defaultFilename || (prefix + Date.now() + '.' + ext);
+
     const bstr = atob(parts[1]);
     let n = bstr.length;
     const u8arr = new Uint8Array(n);
     while (n--) {
       u8arr[n] = bstr.charCodeAt(n);
     }
-    return new File([u8arr], filename, { type: mime });
+    return new File([u8arr], filename, { type: mime, lastModified: Date.now() });
   } catch (e) {
     console.warn('[AutoPost FB] Erro ao converter dataUrl para File:', e);
     return null;
@@ -629,21 +660,36 @@ async function attachMediaToFacebook(mediaDataUrl, dialog, editor) {
   try {
     if (!dialog || !mediaDataUrl) return false;
     
-    const isVideo = isVideoMedia(mediaDataUrl);
+    let isVideo = isVideoMedia(mediaDataUrl);
     let file = null;
     if (mediaDataUrl.startsWith('data:')) {
       file = dataUrlToFile(mediaDataUrl);
+      if (file && file.type && file.type.startsWith('video/')) {
+        isVideo = true;
+      }
     } else {
       try {
         const r = await fetch(mediaDataUrl);
         const b = await r.blob();
-        const type = b.type || (isVideo ? 'video/mp4' : 'image/jpeg');
-        const ext = isVideo ? 'mp4' : 'jpg';
-        file = new File([b], (isVideo ? 'video_' : 'foto_') + Date.now() + '.' + ext, { type });
-      } catch (e) {}
+        let mime = b.type;
+        if (isVideo || (mime && mime.startsWith('video/'))) {
+          isVideo = true;
+          mime = mime || 'video/mp4';
+          const ext = mime.includes('webm') ? 'webm' : mime.includes('quicktime') ? 'mov' : 'mp4';
+          file = new File([b], 'video_' + Date.now() + '.' + ext, { type: mime, lastModified: Date.now() });
+        } else {
+          mime = mime || 'image/jpeg';
+          const ext = mime.includes('png') ? 'png' : mime.includes('webp') ? 'webp' : 'jpg';
+          file = new File([b], 'foto_' + Date.now() + '.' + ext, { type: mime, lastModified: Date.now() });
+        }
+      } catch (e) {
+        console.warn('[AutoPost FB] Erro ao baixar URL de mídia:', e);
+      }
     }
 
     if (!file) return false;
+
+    console.log('[AutoPost FB] 📦 Preparando upload de arquivo:', file.name, 'tipo:', file.type, 'tamanho:', (file.size / (1024 * 1024)).toFixed(2) + 'MB');
 
     const dt = new DataTransfer();
     dt.items.add(file);
@@ -670,16 +716,17 @@ async function attachMediaToFacebook(mediaDataUrl, dialog, editor) {
         await sleep(2200);
       }
 
-      // Procura novamente o input file gerado DENTRO DO MODAL
       fileInput = dialog.querySelector('input[type="file"]');
     }
 
     if (fileInput) {
-      console.log('[AutoPost FB] 📥 Injetando arquivo de mídia (foto/vídeo) no seletor do modal...');
+      console.log('[AutoPost FB] 📥 Injetando arquivo:', file.name, 'no seletor de arquivos do Facebook...');
       fileInput.files = dt.files;
       fileInput.dispatchEvent(new Event('change', { bubbles: true }));
       fileInput.dispatchEvent(new Event('input', { bubbles: true }));
-      await sleep(isVideo ? 6500 : 4000);
+      const waitTime = isVideo ? 8000 : 4000;
+      console.log('[AutoPost FB] ⏳ Aguardando renderização da mídia pelo Facebook (' + waitTime + 'ms)...');
+      await sleep(waitTime);
       console.log('[AutoPost FB] ✅ Mídia carregada no modal com sucesso!');
       return true;
     }
@@ -693,7 +740,7 @@ async function attachMediaToFacebook(mediaDataUrl, dialog, editor) {
       clipboardData: dt
     });
     editor.dispatchEvent(pasteEvent);
-    await sleep(isVideo ? 5000 : 3500);
+    await sleep(isVideo ? 6000 : 3500);
     return true;
   } catch (err) {
     console.warn('[AutoPost FB] Erro ao anexar mídia:', err);
@@ -703,10 +750,11 @@ async function attachMediaToFacebook(mediaDataUrl, dialog, editor) {
 
 const attachImageToFacebook = attachMediaToFacebook;
 
-async function waitForSubmitButtonInDialog(dialog) {
+async function waitForSubmitButtonInDialog(dialog, isVideo = false) {
   if (!dialog) return null;
-  console.log('[AutoPost FB] 🔍 Procurando botão de envio dentro do modal...');
-  for (let i = 0; i < 25; i++) {
+  const maxAttempts = isVideo ? 60 : 30;
+  console.log('[AutoPost FB] 🔍 Procurando botão de envio habilitado no modal (max ' + maxAttempts + ' tentativas)...');
+  for (let i = 0; i < maxAttempts; i++) {
     // 1. Busca por seletores diretos de aria-label dentro do dialog
     const directAria = Array.from(dialog.querySelectorAll(
       '[aria-label="Postar"], [aria-label="Publicar"], [aria-label="Post"], [aria-label="Publicar publicação"], [aria-label="Publicar post"], [aria-label="Share"]'

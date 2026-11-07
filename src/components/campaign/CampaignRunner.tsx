@@ -19,11 +19,13 @@ import {
   ArrowRight,
   Sparkles,
   Video,
-  Film
+  Film,
+  Download
 } from 'lucide-react';
 import { FacebookGroup, PostTemplate, AntiBanConfig, ExecutionLog } from '../../types';
 import { renderTemplate } from '../../utils/spintax';
 import { isVideoUrl } from '../../utils/media';
+import { EXTENSION_VERSION, downloadExtensionZip } from '../../utils/extensionPackage';
 
 interface CampaignRunnerProps {
   groups: FacebookGroup[];
@@ -60,6 +62,10 @@ export const CampaignRunner: React.FC<CampaignRunnerProps> = ({
   const [isExtensionConnected, setIsExtensionConnected] = useState<boolean>(() => {
     return typeof window !== 'undefined' && !!(window as any).__AUTOPOST_FB_EXTENSION_INSTALLED__;
   });
+  const [connectedVersion, setConnectedVersion] = useState<string | null>(() => {
+    return typeof window !== 'undefined' ? (window as any).__AUTOPOST_FB_VERSION__ || null : null;
+  });
+  const [isDownloadingNewZip, setIsDownloadingNewZip] = useState(false);
 
   // Modo Assistido (quando a extensão não estiver carregada)
   const [showAssistedModal, setShowAssistedModal] = useState(false);
@@ -70,6 +76,17 @@ export const CampaignRunner: React.FC<CampaignRunnerProps> = ({
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const handleDownloadNewZip = async () => {
+    try {
+      setIsDownloadingNewZip(true);
+      await downloadExtensionZip();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsDownloadingNewZip(false);
+    }
+  };
+
   // Escuta conexão com a extensão Chrome via bridge.js
   useEffect(() => {
     const handleBridgeMessage = (event: MessageEvent) => {
@@ -77,6 +94,9 @@ export const CampaignRunner: React.FC<CampaignRunnerProps> = ({
 
       if (event.data.type === 'AUTOPOST_EXTENSION_READY' || event.data.type === 'AUTOPOST_PONG') {
         setIsExtensionConnected(true);
+        if (event.data.version) {
+          setConnectedVersion(event.data.version);
+        }
       }
 
       if (event.data.type === 'AUTOPOST_STEP_UPDATE') {
@@ -341,9 +361,32 @@ export const CampaignRunner: React.FC<CampaignRunnerProps> = ({
 
               <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
                 {isExtensionConnected
-                  ? 'A extensão está integrada ao painel. Ao iniciar, ela abrirá as abas reais do Facebook, colará o texto uma única vez e publicará automaticamente.'
+                  ? `A extensão está integrada ao painel (v${connectedVersion || EXTENSION_VERSION}). Ao iniciar, ela abrirá as abas reais do Facebook, injetará a mídia nativa (.mp4 ou .jpg) e publicará automaticamente.`
                   : 'Nenhum site pode controlar o seu Facebook sem a extensão instalada no Chrome (por segurança do navegador). Você pode carregar a extensão em 1 minuto para o robô postar sozinho, ou usar o Modo Assistido direto.'}
               </p>
+
+              {/* Alerta se a extensão instalada for anterior à versão atual com suporte a vídeo */}
+              {isExtensionConnected && connectedVersion && connectedVersion !== EXTENSION_VERSION && (
+                <div className="mt-3 p-3 bg-amber-500/20 border border-amber-500/40 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-200">
+                  <div className="flex items-start gap-2.5">
+                    <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                    <div className="text-xs">
+                      <span className="font-bold">Extensão no Chrome desatualizada (v{connectedVersion} detectada)!</span>
+                      <p className="text-[11px] text-amber-300/90 mt-0.5 leading-relaxed">
+                        A versão antiga tentava enviar o vídeo com extensão de foto (<code>foto_...jpg</code>), gerando o erro de formato no Facebook. Baixe a <strong>v{EXTENSION_VERSION}</strong> e recarregue a pasta em <code>chrome://extensions</code> para o vídeo subir como <code>.mp4</code>.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleDownloadNewZip}
+                    disabled={isDownloadingNewZip}
+                    className="px-3.5 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-500 active:scale-95 rounded-lg shadow transition flex items-center gap-1.5 whitespace-nowrap self-stretch sm:self-auto"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Baixar v{EXTENSION_VERSION} (.zip)</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
