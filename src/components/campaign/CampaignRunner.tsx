@@ -155,6 +155,14 @@ export const CampaignRunner: React.FC<CampaignRunnerProps> = ({
           postUrl: undefined,
         });
       }
+
+      if (event.data.type === 'AUTOPOST_CAMPAIGN_ERROR') {
+        const payload = event.data.payload;
+        const errMsg = payload?.error || 'A extensão não conseguiu iniciar a postagem.';
+        setIsRunning(false);
+        setIsPaused(false);
+        setCurrentStep(`⚠️ ${errMsg}`);
+      }
     };
 
     window.addEventListener('message', handleBridgeMessage);
@@ -194,6 +202,16 @@ export const CampaignRunner: React.FC<CampaignRunnerProps> = ({
       return;
     }
 
+    if (isExtensionConnected && connectedVersion && connectedVersion !== EXTENSION_VERSION) {
+      const confirmProceed = confirm(
+        `⚠️ Extensão desatualizada no Chrome (v${connectedVersion} detectada)!\n\nA versão v${connectedVersion} anterior travou no navegador e não abre as abas do Facebook.\n\nÉ necessário baixar a v${EXTENSION_VERSION} e clicar em recarregar em chrome://extensions.\n\nDeseja baixar a v${EXTENSION_VERSION} agora?`
+      );
+      if (confirmProceed) {
+        handleDownloadNewZip();
+      }
+      return;
+    }
+
     // MODO 100% AUTOMÁTICO REAL: Comanda a extensão Chrome
     setIsRunning(true);
     setIsPaused(false);
@@ -224,6 +242,17 @@ export const CampaignRunner: React.FC<CampaignRunnerProps> = ({
         }
       }
     }, '*');
+
+    // Timeout de segurança: se em 8s a extensão não abriu a aba nem mandou status
+    setTimeout(() => {
+      setCurrentStep(prev => {
+        if (prev === 'Iniciando automação 100% autônoma no Facebook...') {
+          setIsRunning(false);
+          return `⚠️ A aba não abriu. Se você tem a extensão v3.4.2 antiga, ela travou. Recarregue a pasta descompactada da v${EXTENSION_VERSION} em chrome://extensions.`;
+        }
+        return prev;
+      });
+    }, 8500);
 
     // Se a extensão demorar a responder nos primeiros 4 segundos, alerta na barra de status
     if (!isExtensionConnected) {
