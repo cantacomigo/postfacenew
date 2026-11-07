@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+@theme {
+  --color-fb-blue: #1877F2;
+  --color-fb-hover: #166FE5;
+  --color-fb-light: #E7F3FF;
+  --color-fb-dark: #0e5a9f;
+  --color-fb-bg: #F0F2F5;
+  --color-fb-card: #FFFFFF;
+  --color-fb-text: #050505;
+  --color-fb-secondary: #65676B;
+  --color-fb-divider: #CED0D4;
+}
+
+@layer base {
+  body {
+    background-color: #020617;
+    color: #f1f5f9;
+  }
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.6);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.5);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.7);
+}
+
+.glow-blue {
+  box-shadow: 0 0 25px -5px rgba(24, 119, 242, 0.35);
+}
+

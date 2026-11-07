@@ -1,0 +1,6 @@
+{
+  "name": "AutoPost FB - Sistema Anti-Ban de Automação de Grupos",
+  "description": "Arquitetura e sistema de automação de postagens em grupos do Facebook com motor anti-bloqueio, sessão ativa de navegador, gerenciador de templates e relatórios em tempo real.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
