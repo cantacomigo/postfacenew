@@ -18,7 +18,7 @@ import {
   getStoredLogs, 
   saveLogs 
 } from './utils/storage';
-import { downloadExtensionZip } from './utils/extensionPackage';
+import { downloadExtensionZip, EXTENSION_VERSION } from './utils/extensionPackage';
 import { FacebookGroup, PostTemplate, AntiBanConfig, ExecutionLog } from './types';
 
 export function App() {
@@ -170,7 +170,7 @@ export function App() {
 
       {/* Footer */}
       <footer className="border-t border-slate-900 bg-slate-950/60 py-4 text-center text-xs text-slate-500">
-        AutoPost FB Anti-Ban v3.3 • Sistema Especializado de Postagem Segura em Grupos com Injeção Atômica Anti-Duplicação 1x
+        AutoPost FB Anti-Ban v{EXTENSION_VERSION} • Sistema Especializado de Postagem Segura em Grupos com Injeção Atômica, Fotos e Vídeos
       </footer>
 
       {/* Installation Modal */}

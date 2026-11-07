@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { FacebookGroup } from '../../types';
 import { isInvalidGroupName, normalizeGroupUrl } from '../../utils/storage';
+import { EXTENSION_VERSION } from '../../utils/extensionPackage';
 
 const CONSOLE_EXTRACTOR_SCRIPT = `(() => {
   const invalid = new Set(['ver grupo','view group','visitar','visitar grupo','abrir','acessar','grupo fb','grupo do facebook','grupo','grupos','groups','seus grupos','your groups','ver tudo','see all','ver mais','see more','mostrar mais','participar','participar do grupo','join','join group','participando','joined','criar novo grupo','criar grupo','create new group','seu feed','your feed','descobrir','discover','notificações','notifications','configurações','settings','fixar','desafixar','mais','compartilhar','convidar','público','privado','public','private','admin','administrador','moderador','todos os grupos dos quais você participa','grupos que você gerencia','grupos dos quais você participa','sugestões para você','mais sugestões']);
@@ -172,7 +173,7 @@ export const GroupManager: React.FC<GroupManagerProps> = ({
           setDiscoveredGroups([]);
           setScanError(
             payload.error ||
-              'Nenhum grupo foi retornado pela extensão. Verifique se você está logado no Facebook com a extensão v3.3.5 instalada, ou use a aba "Extrator Rápido (Console F12)" ao lado.'
+              `Nenhum grupo foi retornado pela extensão. Verifique se você está logado no Facebook com a extensão v${EXTENSION_VERSION} instalada, ou use a aba "Extrator Rápido (Console F12)" ao lado.`
           );
         }
       }
@@ -290,7 +291,7 @@ export const GroupManager: React.FC<GroupManagerProps> = ({
       setIsScanning(false);
       setScanProgress(0);
       setScanError(
-        'A extensão não respondeu à varredura automática (atualize para a extensão v3.3.5 no botão verde do topo) ou use a aba "Extrator Rápido (Console F12)" ao lado para puxar seus grupos em 2 segundos.'
+        `A extensão não respondeu à varredura automática (atualize para a extensão v${EXTENSION_VERSION} no botão verde do topo) ou use a aba "Extrator Rápido (Console F12)" ao lado para puxar seus grupos em 2 segundos.`
       );
     }, 18000);
   };

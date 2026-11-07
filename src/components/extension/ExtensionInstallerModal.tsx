@@ -65,7 +65,7 @@ export const ExtensionInstallerModal: React.FC<ExtensionInstallerModalProps> = (
                 Modo 100% Autônomo
               </span>
               <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                v3.3 Fix 1x
+                v{EXTENSION_VERSION} (Vídeo & Anti-Ban)
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-1 leading-relaxed max-w-xl">
@@ -147,7 +147,7 @@ export const ExtensionInstallerModal: React.FC<ExtensionInstallerModalProps> = (
                 Descompactar / Extrair a Pasta
               </h4>
               <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
-                Vá até a sua pasta de <strong>Downloads</strong>, clique com o <strong>botão direito</strong> no arquivo baixado <code className="bg-slate-900 text-blue-300 px-1.5 py-0.5 rounded border border-slate-800 text-[11px] font-mono">autopost-fb-extensao-v3.3.zip</code> e selecione <strong>"Extrair Tudo"</strong> para criar uma pasta.
+                Vá até a sua pasta de <strong>Downloads</strong>, clique com o <strong>botão direito</strong> no arquivo baixado <code className="bg-slate-900 text-blue-300 px-1.5 py-0.5 rounded border border-slate-800 text-[11px] font-mono">autopost-fb-extensao-v{EXTENSION_VERSION}.zip</code> e selecione <strong>"Extrair Tudo"</strong> para criar uma pasta.
               </p>
             </div>
           </div>
@@ -202,7 +202,7 @@ export const ExtensionInstallerModal: React.FC<ExtensionInstallerModalProps> = (
           <div className="p-3.5 rounded-2xl bg-amber-950/20 border border-amber-800/30 flex items-start gap-3">
             <Sparkles className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
             <p className="text-xs text-amber-200 leading-relaxed">
-              <strong>Importante se você tinha a versão 3.2:</strong> Remova a extensão antiga da tela <code className="font-mono bg-slate-900 px-1 py-0.5 rounded">chrome://extensions</code> clicando em <strong>"Remover"</strong>, e carregue a nova pasta descompactada da <strong>v3.3</strong> para que a correção contra o post duplicado 3x tenha efeito imediato.
+              <strong>Como atualizar se já tem a extensão instalada:</strong> Na tela <code className="font-mono bg-slate-900 px-1 py-0.5 rounded">chrome://extensions</code>, clique no botão de <strong>recarga circular (atualizar)</strong> no card da extensão ou clique em <strong>"Remover"</strong> e carregue a nova pasta descompactada da <strong>v{EXTENSION_VERSION}</strong>.
             </p>
           </div>
         </div>

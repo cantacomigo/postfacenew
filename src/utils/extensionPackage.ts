@@ -7,7 +7,7 @@ export interface ExtensionFile {
   content: string;
 }
 
-export const EXTENSION_VERSION = '3.4.2';
+export const EXTENSION_VERSION = '3.4.3';
 
 export function getExtensionFiles(): ExtensionFile[] {
   const manifest = `{
@@ -239,8 +239,10 @@ function notifyDashboard(action, payload) {
 
 function isVideoMedia(url) {
   if (!url) return false;
-  const s = url.toLowerCase();
-  return s.startsWith('data:video') || /\.(mp4|webm|mov|m4v|ogg|ogv|mkv|3gp|avi)(\?.*)?$/i.test(s);
+  const s = String(url).toLowerCase().split('?')[0].split('#')[0];
+  if (s.startsWith('data:video') || s.startsWith('video/')) return true;
+  const videoExts = ['.mp4', '.webm', '.mov', '.m4v', '.ogg', '.ogv', '.mkv', '.3gp', '.avi'];
+  return videoExts.some(ext => s.endsWith(ext));
 }
 
 async function convertUrlToBase64DataUrl(mediaUrl) {
@@ -427,9 +429,10 @@ function wait(ms) {
   const content = `// Content Script - AutoPost FB Anti-Ban v${EXTENSION_VERSION}
 function isVideoMedia(urlOrMime) {
   if (!urlOrMime) return false;
-  const s = String(urlOrMime).toLowerCase();
-  if (s.startsWith('data:video/') || s.startsWith('video/')) return true;
-  return /\.(mp4|webm|mov|m4v|ogg|ogv|mkv|3gp|avi)(\?.*)?$/i.test(s);
+  const s = String(urlOrMime).toLowerCase().split('?')[0].split('#')[0];
+  if (s.startsWith('data:video') || s.startsWith('video/')) return true;
+  const videoExts = ['.mp4', '.webm', '.mov', '.m4v', '.ogg', '.ogv', '.mkv', '.3gp', '.avi'];
+  return videoExts.some(ext => s.endsWith(ext));
 }
 
 if (window.top === window.self) {
