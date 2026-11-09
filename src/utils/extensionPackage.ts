@@ -7,7 +7,7 @@ export interface ExtensionFile {
   content: string;
 }
 
-export const EXTENSION_VERSION = '3.4.3';
+export const EXTENSION_VERSION = '3.4.4';
 
 export function getExtensionFiles(): ExtensionFile[] {
   const manifest = `{
@@ -397,7 +397,8 @@ async function runCampaignWorkflow(campaign) {
           }, 50000);
         });
 
-        // Envia comando para a aba do Facebook com até 5 tentativas para garantir inicialização
+        // Gera token único estrito por grupo e tenta entregar com segurança
+        const postToken = 'POST_' + group.id + '_' + Date.now() + '_' + Math.random().toString(36).substring(7);
         let delivered = false;
         for (let attempt = 0; attempt < 5; attempt++) {
           try {
@@ -409,10 +410,10 @@ async function runCampaignWorkflow(campaign) {
                 text: template.text,
                 mediaDataUrl: mediaDataUrl,
                 mediaUrls: template.mediaUrls || [],
-                postToken: 'POST_' + Date.now() + '_' + Math.random().toString(36).substring(7)
+                postToken: postToken
               }
             });
-            if (resp && resp.received) {
+            if (resp && (resp.received || resp.alreadyProcessing)) {
               delivered = true;
               break;
             }
@@ -561,18 +562,34 @@ if (window.top === window.self) {
   }
 }
 
+const processedPostTokens = new Set();
 let isPostingCurrently = false;
+let alreadyPostedInThisTab = false;
 
 async function handleSinglePostExecution(data) {
+  if (alreadyPostedInThisTab) {
+    console.warn('[AutoPost FB] 🛑 Esta aba já realizou sua postagem única. Bloqueando nova tentativa.');
+    return { success: true, reason: 'Esta aba já realizou sua publicação única.' };
+  }
+
+  if (data && data.postToken) {
+    if (processedPostTokens.has(data.postToken)) {
+      console.warn('[AutoPost FB] 🛑 Token de postagem já processado:', data.postToken);
+      return { success: true, reason: 'Token de postagem já processado.' };
+    }
+    processedPostTokens.add(data.postToken);
+  }
+
   if (isPostingCurrently) {
     return { success: false, reason: 'Outra postagem já está em processamento no momento.' };
   }
 
   isPostingCurrently = true;
+  alreadyPostedInThisTab = true;
 
   try {
     const { text, groupName, mediaDataUrl, mediaUrls } = data;
-    console.log('[AutoPost FB] 🎯 Iniciando publicação no grupo:', groupName);
+    console.log('[AutoPost FB] 🎯 Iniciando publicação ÚNICA no grupo:', groupName);
 
     // 1. Localiza o gatilho de publicação do grupo (ex: "Escreva algo...")
     const trigger = await findComposerTrigger();
@@ -620,7 +637,7 @@ async function handleSinglePostExecution(data) {
     const mediaPayload = mediaDataUrl || (mediaUrls && mediaUrls[0]);
     if (mediaPayload) {
       hasVideo = isVideoMedia(mediaPayload);
-      console.log(\`[AutoPost FB] \${hasVideo ? '🎥' : '🖼️'} Anexando \${hasVideo ? 'vídeo' : 'foto'} ao post dentro do modal (sem tocar comentários)...\`);
+      console.log('[AutoPost FB] ' + (hasVideo ? '🎥 Anexando vídeo' : '🖼️ Anexando foto') + ' ao post dentro do modal (sem tocar comentários)...');
       await attachMediaToFacebook(mediaPayload, dialog, editor);
       await sleep(hasVideo ? 6000 : 3500); // Aguarda upload e preview da mídia no Facebook
     }
@@ -630,7 +647,7 @@ async function handleSinglePostExecution(data) {
     // 5. Encontra botão Postar / Publicar habilitado DENTRO DO MODAL
     const submitBtn = await waitForSubmitButtonInDialog(dialog, hasVideo);
     if (submitBtn) {
-      console.log('[AutoPost FB] 🚀 Clicando no botão Postar/Publicar...');
+      console.log('[AutoPost FB] 🚀 Clicando no botão Postar/Publicar (1 ÚNICA VEZ - SEM DUPLICAÇÃO)...');
       simulateHumanClick(submitBtn);
     } else {
       // Fallback extremo: Envio via atalho nativo de acessibilidade do Facebook (Ctrl + Enter)
@@ -647,20 +664,22 @@ async function handleSinglePostExecution(data) {
       }));
     }
 
-    // Aguarda e verifica se o diálogo fechou; se persistir, re-aplica o clique de envio
-    await sleep(3500);
-    const stillOpenDialog = document.querySelector('div[role="dialog"]');
-    if (stillOpenDialog) {
-      const retryBtn = findSubmitButtonQuick(stillOpenDialog);
-      if (retryBtn) {
-        console.log('[AutoPost FB] 🔄 Confirmando clique no botão de publicação...');
-        simulateHumanClick(retryBtn);
-        await sleep(2500);
+    // 6. Aguarda o Facebook processar o envio e fechar o diálogo.
+    // REGRA DE OURO ANTI-DUPLICAÇÃO: NUNCA RE-CLICAR NO BOTÃO!
+    // Re-clicar no botão enquanto o Facebook processava a mídia gerava 2 postagens no mesmo grupo.
+    console.log('[AutoPost FB] ⏳ Aguardando confirmação do envio pelo Facebook (sem re-cliques)...');
+    const maxWaitSec = hasVideo ? 30 : 15;
+    for (let sec = 0; sec < maxWaitSec; sec++) {
+      await sleep(1000);
+      const stillOpen = document.querySelector('div[role="dialog"]');
+      if (!stillOpen) {
+        console.log('[AutoPost FB] ✅ Modal fechado pelo Facebook! Publicação confirmada.');
+        break;
       }
     }
 
-    console.log('[AutoPost FB] 🎉 Publicação enviada com sucesso no Facebook!');
-    await sleep(2500);
+    console.log('[AutoPost FB] 🎉 Publicação única concluída com sucesso no Facebook!');
+    await sleep(2000);
 
     isPostingCurrently = false;
     return { success: true, timestamp: new Date().toISOString() };
@@ -901,44 +920,26 @@ function simulateHumanClick(element) {
   try {
     if (typeof window.PointerEvent === 'function') {
       element.dispatchEvent(new PointerEvent('pointerdown', opts));
+      element.dispatchEvent(new PointerEvent('pointerup', opts));
     }
-  } catch (e) {}
-
-  try {
     element.dispatchEvent(new MouseEvent('mousedown', opts));
+    element.dispatchEvent(new MouseEvent('mouseup', opts));
   } catch (e) {}
 
   try {
     if (typeof element.focus === 'function') element.focus();
   } catch (e) {}
 
-  try {
-    element.dispatchEvent(new MouseEvent('mouseup', opts));
-  } catch (e) {}
-
-  try {
-    if (typeof window.PointerEvent === 'function') {
-      element.dispatchEvent(new PointerEvent('pointerup', opts));
-    }
-  } catch (e) {}
-
-  try {
-    element.dispatchEvent(new MouseEvent('click', opts));
-  } catch (e) {}
-
+  // Dispara EXATAMENTE 1 evento de clique (sem duplicação via MouseEvent + click + pointTarget)
   try {
     if (typeof element.click === 'function') {
       element.click();
+    } else {
+      element.dispatchEvent(new MouseEvent('click', opts));
     }
-  } catch (e) {}
-
-  // Se houver um sub-elemento no ponto exato, aciona também
-  try {
-    const pointTarget = document.elementFromPoint(clientX, clientY);
-    if (pointTarget && pointTarget !== element && typeof pointTarget.click === 'function') {
-      pointTarget.click();
-    }
-  } catch (e) {}
+  } catch (e) {
+    element.dispatchEvent(new MouseEvent('click', opts));
+  }
 }
 
 async function findComposerTrigger() {
